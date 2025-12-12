@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import type { DecodedResult } from "./types.js";
 import path from "path";
+import fs from "fs";
 
 /** 
  * Print decoded result to console.
@@ -86,6 +87,43 @@ export function resolveDisplaySource(
   appRoot: string
 ): string | null {
   if (!source) return null;
-  if (path.isAbsolute(source)) return source;
-  return path.join(appRoot, source);
+
+  if (source.includes("node_modules")) {
+    return source;
+  }
+  // Try to find source file in app root
+  const found = findSourceInAppRoot(appRoot, source);
+  if (found) return found;
+
+  return source;
 }
+
+// Search for source file in app root directory
+function findSourceInAppRoot(
+  appRoot: string,
+  source: string
+): string | null {
+  const fileName = path.basename(source);
+
+  const stack = [appRoot];
+
+  while (stack.length) {
+    const current = stack.pop()!;
+    const entries = fs.readdirSync(current, { withFileTypes: true });
+
+    for (const e of entries) {
+      const fullPath = path.join(current, e.name);
+
+      if (e.isDirectory()) {
+        if (e.name === "node_modules" || e.name.startsWith(".")) continue;
+        stack.push(fullPath);
+      }
+      if (e.isFile() && e.name === fileName) {
+        return fullPath;
+      }
+    }
+  }
+
+  return null;
+}
+
