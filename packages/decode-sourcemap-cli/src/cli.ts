@@ -32,7 +32,11 @@ function normalizeCliOptions(argv: minimist.ParsedArgs): CliOptions {
   };
 }
 
-function selectAppFromConfig(config: SourcemapToolsConfig, opts: CliOptions, cwd: string): { projectRoot: string; dist: string; appName: string } {
+async function selectAppFromConfig(
+  config: SourcemapToolsConfig,
+  opts: CliOptions,
+  cwd: string
+): Promise<{ projectRoot: string; dist: string; appName: string }> {
   const apps = config.apps;
 
   if (!apps || apps.length === 0) {
@@ -44,35 +48,37 @@ function selectAppFromConfig(config: SourcemapToolsConfig, opts: CliOptions, cwd
   if (opts.app) {
     selected = apps.find((a) => a.name === opts.app);
     if (!selected) {
-      throw new Error(`App '${opts.app}' not found in config. Available: ${apps.map((a) => a.name).join(", ")}`);
+      throw new Error(
+        `App '${opts.app}' not found. Available: ${apps.map((a) => a.name).join(", ")}`
+      );
     }
   } else if (apps.length === 1) {
     selected = apps[0];
   }
 
   if (!selected) {
-    // Lazy import to avoid inquirer dependency during type analysis
-    const inquirer = require("inquirer") as typeof import("inquirer");
-    return inquirer
-      .prompt([
-        {
-          type: "list",
-          name: "appName",
-          message: "Select target app:",
-          choices: apps.map((a) => ({ name: `${a.name}  (${a.distPath})`, value: a.name })),
-        },
-      ])
-      .then((answer) => {
-        const chosen = apps.find((a) => a.name === answer.appName)!;
-        const projectRoot = path.resolve(cwd, chosen.appPath ?? ".");
-        const dist = path.resolve(cwd, chosen.distPath);
-        return { projectRoot, dist, appName: chosen.name };
-      });
+    const inquirer = (await import("inquirer")).default;
+
+    const { appName } = await inquirer.prompt([
+      {
+        type: "list",
+        name: "appName",
+        message: "Select target app:",
+        choices: apps.map((a) => ({
+          name: `${a.name} (${a.distPath})`,
+          value: a.name,
+        })),
+      },
+    ]);
+
+    selected = apps.find((a) => a.name === appName)!;
   }
 
-  const projectRoot = path.resolve(cwd, selected.appPath ?? ".");
-  const dist = path.resolve(cwd, selected.distPath);
-  return { projectRoot, dist, appName: selected.name };
+  return {
+    projectRoot: path.resolve(cwd, selected.appPath ?? "."),
+    dist: path.resolve(cwd, selected.distPath),
+    appName: selected.name,
+  };
 }
 
 async function resolveTarget(cwd: string, opts: CliOptions): Promise<{ projectRoot: string; dist: string; appName: string }> {
@@ -86,7 +92,7 @@ async function resolveTarget(cwd: string, opts: CliOptions): Promise<{ projectRo
   // 2) Config-based multi app (sourcemap.config.json)
   const config = loadConfig(cwd, opts.config ?? null);
   if (config) {
-    return selectAppFromConfig(config, opts, cwd);
+    return await selectAppFromConfig(config, opts, cwd);
   }
 
   // 3) Fallback: turborepo-style /apps auto discovery
