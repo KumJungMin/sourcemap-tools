@@ -1,0 +1,19 @@
+{
+  "name": "sourcemap-tools-monorepo",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.0",
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "test": "turbo run test",
+    "decode-sourcemap": "decode-sourcemap"
+  },
+  "dependencies": {
+    "@jm/decode-sourcemap-cli": "workspace:*"
+  },
+  "devDependencies": {
+    "turbo": "2.6.3",
+    "typescript": "5.9.3"
+  }
+}
