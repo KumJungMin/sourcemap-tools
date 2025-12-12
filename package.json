@@ -10,7 +10,7 @@
     "decode-sourcemap": "decode-sourcemap"
   },
   "dependencies": {
-    "@jm/decode-sourcemap-cli": "workspace:*"
+    "decode-sourcemap-cli": "workspace:*"
   },
   "devDependencies": {
     "turbo": "2.6.3",

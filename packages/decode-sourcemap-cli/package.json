@@ -1,5 +1,5 @@
 {
-  "name": "@jm/decode-sourcemap-cli",
+  "name": "decode-sourcemap-cli",
   "version": "0.3.0",
   "private": false,
   "type": "module",
