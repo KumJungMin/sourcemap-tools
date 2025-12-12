@@ -1,24 +1,66 @@
 import fs from "fs";
 import path from "path";
 
+/**
+ * Single app entry definition inside `sourcemap.config.json`
+ *
+ * Each entry represents one build target that can be decoded by the CLI.
+ * (ex: monorepo with multiple apps, or multiple build outputs)
+ */
 export interface AppConfigEntry {
-  /** Logical name shown in the selector (e.g. "web") */
+  /**
+   * Logical app name shown in the CLI selector.
+   * Example: "web", "admin", "mobile"
+   */
   name: string;
-  /** Optional app root path (for future use / editor integration) */
-  appPath?: string;
-  /** Build output directory that contains JS bundles & sourcemaps */
+
+  /**
+   * Path to the build output directory that contains:
+   * - bundled JS files
+   * - corresponding `.map` files
+   *
+   * This path is resolved relative to the current working directory.
+   */
   distPath: string;
 }
 
+/**
+ * Root configuration shape for decode-sourcemap-cli.
+ *
+ * The CLI supports multiple apps in a single project,
+ * each with its own build output directory.
+ */
 export interface SourcemapToolsConfig {
+  /**
+   * List of apps that can be selected in the CLI.
+   */
   apps: AppConfigEntry[];
 }
 
+/**
+ * Default config file name.
+ *
+ * The CLI will automatically look for this file
+ * in the current working directory if no explicit path is provided.
+ */
 const DEFAULT_CONFIG_NAME = "sourcemap.config.json";
 
-export function loadConfig(cwd: string, explicitPath?: string | null): SourcemapToolsConfig | null {
+/**
+ * Loads `sourcemap.config.json` from disk.
+ *
+ * Priority:
+ * 1. Explicit config path provided via CLI option (`--config`)
+ * 2. Default config file in the current working directory
+ *
+ * Returns:
+ * - Parsed config object if valid
+ * - `null` if no config is found or config is invalid
+ */
+export function loadConfig(
+  cwd: string,
+  explicitPath?: string | null
+): SourcemapToolsConfig | null {
   const candidates: string[] = [];
-
   if (explicitPath) {
     candidates.push(path.resolve(cwd, explicitPath));
   } else {
@@ -26,9 +68,7 @@ export function loadConfig(cwd: string, explicitPath?: string | null): Sourcemap
   }
 
   for (const file of candidates) {
-    if (!file) continue;
-    if (!fs.existsSync(file)) continue;
-
+    if (!file || !fs.existsSync(file)) continue;
     try {
       const raw = fs.readFileSync(file, "utf8");
       const json = JSON.parse(raw) as SourcemapToolsConfig;
@@ -36,7 +76,6 @@ export function loadConfig(cwd: string, explicitPath?: string | null): Sourcemap
       if (!json || !Array.isArray(json.apps) || json.apps.length === 0) {
         return null;
       }
-
       return json;
     } catch (e) {
       console.error(`⚠️  Failed to read config: ${file}`);
@@ -44,6 +83,5 @@ export function loadConfig(cwd: string, explicitPath?: string | null): Sourcemap
       return null;
     }
   }
-
   return null;
 }

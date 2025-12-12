@@ -2,14 +2,12 @@ import fs from "fs";
 import path from "path";
 import type { DecodedResult } from "./types.js";
 
-function escapeHtml(str: string): string {
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
+/** 
+ * Generate an HTML report from decoded results.
+ * - The report includes a table with bundle positions, original sources, and error kinds.
+ * - The generated HTML file is saved to the specified output path.
+ * */ 
 export function generateHtmlReport(
   results: DecodedResult[],
   outputPath: string
@@ -93,4 +91,12 @@ export function generateHtmlReport(
   const abs = path.resolve(process.cwd(), outputPath);
   fs.writeFileSync(abs, html, "utf8");
   return abs;
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

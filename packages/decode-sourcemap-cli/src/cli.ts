@@ -1,42 +1,136 @@
 #!/usr/bin/env node
 import minimist from "minimist";
 import path from "path";
+
 import { selectApp } from "./selectApp.js";
 import { inputLogs } from "./inputLogs.js";
 import { extractErrorLocations } from "./parseLogs.js";
 import { decodeMany } from "./decode.js";
-import { printResult, setUseColor, setRawMode } from "./printer.js";
+import { printResult } from "./printer.js";
 import { generateHtmlReport } from "./htmlReport.js";
 import { loadConfig } from "./config.js";
 import type { AppConfigEntry, SourcemapToolsConfig } from "./config.js";
 
+/**
+ * CLI options accepted from command line arguments.
+ *
+ * - dist   : Explicit build output directory (highest priority)
+ * - config : Path to sourcemap.config.json
+ * - app    : App name to select when using config
+ * - html   : Generate HTML report
+ */
 interface CliOptions {
   dist?: string;
-  app?: string;
-  appPath?: string;
   config?: string;
+  app?: string;
   html?: string | null;
-  noColor?: boolean;
-  raw?: boolean;
 }
 
-function normalizeCliOptions(argv: minimist.ParsedArgs): CliOptions {
+/* -------------------------------------------------------------------------- */
+/*                                    Entry                                   */
+/* -------------------------------------------------------------------------- */
+
+main().catch((err) => {
+  console.error("❌ Unexpected error in CLI:", err);
+  process.exit(1);
+});
+
+/**
+ * CLI entry point.
+ *
+ * Flow:
+ * 1. Parse CLI options
+ * 2. Resolve target dist directory
+ * 3. Accept pasted error logs
+ * 4. Extract minified locations
+ * 5. Decode sourcemaps
+ * 6. Print results
+ * 7. (Optional) Generate HTML report
+ */
+async function main() {
+  const argv = minimist(process.argv.slice(2));
+  const options = normalizeCliOptions(argv);
+
+  console.log("");
+  console.log("🔍 decode-sourcemap-cli");
+  console.log("------------------------");
+
+  const cwd = process.cwd();
+
+  // Resolve build output directory
+  const { dist, appName } = await resolveTarget(cwd, options);
+
+  console.log(`📦 App: ${appName}`);
+  console.log(`📂 Dist: ${dist}`);
+  console.log("");
+
+  // Read pasted logs
+  const lines = await inputLogs();
+  if (lines.length === 0) {
+    console.log("No logs provided. Exit.");
+    return;
+  }
+
+  // Extract "xxx.js:line:column" patterns
+  const targets = extractErrorLocations(lines);
+  if (targets.length === 0) {
+    console.log("No valid error locations found in logs.");
+    return;
+  }
+
+  // Decode sourcemaps
+  const results = await decodeMany(dist, targets);
+
+  // Print decoded results
+  results.forEach((r, index) => {
+    printResult(r, index + 1);
+  });
+
+  // Optional HTML report
+  if (options.html) {
+    const outPath = generateHtmlReport(results, options.html);
+    console.log(`\n📄 HTML report generated at: ${outPath}`);
+  }
+
+  console.log("");
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               Option Helpers                                */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Normalize raw minimist argv into typed CLI options.
+ * Acts as a whitelist for supported flags.
+ */
+function normalizeCliOptions(args: minimist.ParsedArgs): CliOptions {
   return {
-    dist: typeof argv.dist === "string" ? argv.dist : undefined,
-    app: typeof argv.app === "string" ? argv.app : undefined,
-    appPath: typeof argv.appPath === "string" ? argv.appPath : undefined,
-    config: typeof argv.config === "string" ? argv.config : undefined,
-    html: typeof argv.html === "string" ? argv.html : null,
-    noColor: argv["no-color"] === true,
-    raw: argv["raw"] === true,
+    dist: typeof args.dist === "string" ? args.dist : undefined,
+    app: typeof args.app === "string" ? args.app : undefined,
+    config: typeof args.config === "string" ? args.config : undefined,
+    html: typeof args.html === "string" ? args.html : null,
   };
 }
 
+/* -------------------------------------------------------------------------- */
+/*                           Config-based App Select                           */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Select target app from sourcemap.config.json.
+ *
+ * Rules:
+ * - If --app is provided, select matching app
+ * - If only one app exists, auto-select
+ * - Otherwise, prompt user
+ *
+ * distPath defaults to "dist" if not defined.
+ */
 async function selectAppFromConfig(
   config: SourcemapToolsConfig,
-  opts: CliOptions,
+  options: CliOptions,
   cwd: string
-): Promise<{ projectRoot: string; dist: string; appName: string }> {
+): Promise<{ dist: string; appName: string }> {
   const apps = config.apps;
 
   if (!apps || apps.length === 0) {
@@ -45,11 +139,13 @@ async function selectAppFromConfig(
 
   let selected: AppConfigEntry | undefined;
 
-  if (opts.app) {
-    selected = apps.find((a) => a.name === opts.app);
+  if (options.app) {
+    selected = apps.find((a) => a.name === options.app);
     if (!selected) {
       throw new Error(
-        `App '${opts.app}' not found. Available: ${apps.map((a) => a.name).join(", ")}`
+        `App '${options.app}' not found. Available: ${apps
+          .map((a) => a.name)
+          .join(", ")}`
       );
     }
   } else if (apps.length === 1) {
@@ -65,7 +161,7 @@ async function selectAppFromConfig(
         name: "appName",
         message: "Select target app:",
         choices: apps.map((a) => ({
-          name: `${a.name} (${a.distPath})`,
+          name: a.name,
           value: a.name,
         })),
       },
@@ -74,89 +170,48 @@ async function selectAppFromConfig(
     selected = apps.find((a) => a.name === appName)!;
   }
 
+  const distPath = selected.distPath ?? "dist";
+
   return {
-    projectRoot: path.resolve(cwd, selected.appPath ?? "."),
-    dist: path.resolve(cwd, selected.distPath),
     appName: selected.name,
+    dist: path.resolve(cwd, distPath),
   };
 }
 
-async function resolveTarget(cwd: string, opts: CliOptions): Promise<{ projectRoot: string; dist: string; appName: string }> {
-  // 1) Highest priority: explicit --dist
-  if (opts.dist) {
-    const dist = path.resolve(cwd, opts.dist);
-    const projectRoot = opts.appPath ? path.resolve(cwd, opts.appPath) : cwd;
-    return { projectRoot, dist, appName: opts.app ?? "app" };
+/* -------------------------------------------------------------------------- */
+/*                             Target Resolution                               */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Resolve build output directory to decode sourcemaps from.
+ *
+ * Priority:
+ * 1. --dist option
+ * 2. sourcemap.config.json
+ * 3. Fallback auto-discovery (turborepo /apps)
+ */
+async function resolveTarget(
+  cwd: string,
+  options: CliOptions
+): Promise<{ dist: string; appName: string }> {
+  // 1) Explicit dist path
+  if (options.dist) {
+    return {
+      dist: path.resolve(cwd, options.dist),
+      appName: options.app ?? "app",
+    };
   }
 
-  // 2) Config-based multi app (sourcemap.config.json)
-  const config = loadConfig(cwd, opts.config ?? null);
+  // 2) Config-based multi app
+  const config = loadConfig(cwd, options.config ?? null);
   if (config) {
-    return await selectAppFromConfig(config, opts, cwd);
+    return await selectAppFromConfig(config, options, cwd);
   }
 
-  // 3) Fallback: turborepo-style /apps auto discovery
+  // 3) Fallback auto-discovery
   const fallback = await selectApp();
   return {
-    projectRoot: fallback.root,
-    dist: fallback.dist,
-    appName: fallback.targetApp,
+    appName: fallback.appName,
+    dist: path.join(fallback.appRoot, "dist"), // assume /dist
   };
 }
-
-async function main() {
-  const argv = minimist(process.argv.slice(2));
-  const opts = normalizeCliOptions(argv);
-
-  if (opts.noColor) {
-    setUseColor(false);
-  }
-  if (opts.raw) {
-    setRawMode(true);
-  }
-
-  console.log("");
-  console.log("🔍 decode-sourcemap-cli");
-  console.log("------------------------");
-
-  const cwd = process.cwd();
-
-  // Resolve target build directory
-  const { projectRoot, dist, appName } = await resolveTarget(cwd, opts);
-
-  console.log(`📁 Project root: ${projectRoot}`);
-  console.log(`📦 App: ${appName}`);
-  console.log(`📂 Dist: ${dist}`);
-  console.log("");
-
-  // Input logs
-  const lines = await inputLogs();
-  if (lines.length === 0) {
-    console.log("No logs provided. Exit.");
-    return;
-  }
-
-  const targets = extractErrorLocations(lines);
-  if (targets.length === 0) {
-    console.log("No 'xxx.js:line:column' pattern found in logs.");
-    return;
-  }
-
-  const results = await decodeMany(dist, targets);
-
-  results.forEach((r, index) => {
-    printResult(r, index + 1);
-  });
-
-  if (opts.html) {
-    const outPath = generateHtmlReport(results, opts.html);
-    console.log(`\n📄 HTML report generated at: ${outPath}`);
-  }
-
-  console.log("");
-}
-
-main().catch((err) => {
-  console.error("❌ Unexpected error in CLI:", err);
-  process.exit(1);
-});

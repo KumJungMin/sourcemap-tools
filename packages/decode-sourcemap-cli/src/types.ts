@@ -1,5 +1,14 @@
 
-export type ErrorKind = "app" | "vue-runtime" | "library" | "unknown" | "react-runtime";
+export type ErrorKind =
+  | "app"
+  | "vue"
+  | "nuxt"
+  | "react"
+  | "react-dom"
+  | "next"
+  | "library"
+  | "unknown";
+
 
 export interface OriginalPosition {
   source: string | null;
