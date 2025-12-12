@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Sourcemap Error Report</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; background: #020617; color: #e5e7eb; }
+    h1 { font-size: 24px; margin-bottom: 16px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead { background: #111827; }
+    th, td { padding: 8px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; }
+    tr:nth-child(even) { background: #030712; }
+    code { font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+  </style>
+</head>
+<body>
+  <h1>Sourcemap Error Report</h1>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>Bundle Location</th>
+        <th>Source Location</th>
+        <th>Kind</th>
+      </tr>
+    </thead>
+    <tbody>
+    
+      <tr>
+        <td>1</td>
+        <td>ExampleComponent-Cq_iF_Ko.js:1:120</td>
+        <td>../../src/components/ExampleComponent.vue:6:8</td>
+        <td>app</td>
+      </tr>
+
+      <tr>
+        <td>2</td>
+        <td>index-CWMXbtJ-.js:13:38</td>
+        <td>../../../../node_modules/.pnpm/@vue+runtime-core@3.5.25/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:199:18</td>
+        <td>vue-runtime</td>
+      </tr>
+
+      <tr>
+        <td>3</td>
+        <td>index-CWMXbtJ-.js:13:108</td>
+        <td>../../../../node_modules/.pnpm/@vue+runtime-core@3.5.25/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js:206:16</td>
+        <td>vue-runtime</td>
+      </tr>
+
+      <tr>
+        <td>4</td>
+        <td>index-CWMXbtJ-.js:17:4002</td>
+        <td>../../../../node_modules/.pnpm/@vue+runtime-dom@3.5.25/node_modules/@vue/runtime-dom/dist/runtime-dom.esm-bundler.js:730:4</td>
+        <td>vue-runtime</td>
+      </tr>
+    </tbody>
+  </table>
+</body>
+</html>
