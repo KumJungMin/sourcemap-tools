@@ -4,9 +4,11 @@ import path from "path";
 import type {
   DecodedResult,
   TargetLocation,
-  OriginalPosition
+  OriginalPosition,
+  DecodeOptions,
 } from "./types.js";
 import { classifyError } from "./classify.js";
+
 
 
 /**
@@ -23,13 +25,15 @@ import { classifyError } from "./classify.js";
  * This function never throws on missing files.
  * It always returns a DecodedResult to keep batch decoding stable.
  */
+
+
 async function decodeOne(
   dist: string,
   target: TargetLocation,
+  options: DecodeOptions = { strategy: "strict" },
 ): Promise<DecodedResult> {
-
   // Step 1: locate the JS bundle referenced in the error log
-  const jsPath = resolveJsPath(dist, target.file);
+  const jsPath = resolveJsPath(dist, target.file, options.strategy);
   if (!jsPath) {
     // JS file not found → return fallback result
     return {
@@ -92,12 +96,13 @@ async function decodeOne(
 export async function decodeMany(
   dist: string,
   targets: TargetLocation[],
+  options: DecodeOptions = { strategy: "strict" },
 ): Promise<DecodedResult[]> {
 
   const results: DecodedResult[] = [];
 
   for (const target of targets) {
-    results.push(await decodeOne(dist, target));
+    results.push(await decodeOne(dist, target, options));
   }
   return results;
 }
@@ -108,19 +113,59 @@ export async function decodeMany(
  * - find the JS bundle file in the dist directory
  *   e.g. dist/index-abc123.js, dist/index-abc123.js
  * */ 
-function resolveJsPath(dist: string, file: string): string | null {
-  const baseName = path.basename(file);
+function resolveJsPath(
+  dist: string,
+  file: string,
+  strategy: "strict" | "filename",
+): string | null {
+  // -------------------------
+  // strict: find by exact or common patterns
+  // -------------------------
+  if (strategy === "strict") {
+    const baseName = path.basename(file);
 
-  const candidates = [
-    path.join(dist, file),  // e.g. dist/index-xxx.js
-    path.join(dist, baseName),  // e.g. dist/index-xxx.js (log only contains basename)
-    path.join(dist, "assets", baseName),  // e.g. dist/assets/index-xxx.js
-  ];
-  for (const p of candidates) {
-    if (fs.existsSync(p)) return p;
+    const candidates = [
+      path.join(dist, file),
+      path.join(dist, baseName),
+      path.join(dist, "assets", baseName),
+    ];
+
+    for (const p of candidates) {
+      if (fs.existsSync(p)) return p;
+    }
+    return null;
   }
-  return null;
+
+  // -------------------------
+  // filename: find by filename matching
+  // -------------------------
+  const assetsDir = path.join(dist, "assets");
+
+  if (!fs.existsSync(assetsDir)) return null;
+
+  const entryName = extractEntryName(file);
+
+  const candidates = fs.readdirSync(assetsDir)
+    .filter(f => f.endsWith(".js"))
+    .filter(f => f.startsWith(entryName + "-"))
+    .map(f => path.join(assetsDir, f));
+
+  return candidates[0] ?? null;
 }
+
+/**
+ * extractEntryName function
+ * - Extract the entry name from a hashed JS bundle filename.
+ *
+ * Examples:
+ * - helloWorld.34dfds3.js → helloWorld
+ * - index.a1b2c3d4.js     → index
+ */
+function extractEntryName(file: string): string {
+  return path.basename(file).replace(/[-.][A-Za-z0-9_]{6,}\.js$/, "");
+}
+
+
 
 /**
  * resolveMapPath function

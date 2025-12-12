@@ -25,6 +25,11 @@ export interface DecodedResult {
   kind: ErrorKind;
 }
 
+
+export interface DecodeOptions {
+  strategy: "strict" | "filename";
+}
+
 export interface TargetLocation {
   file: string;
   line: number;

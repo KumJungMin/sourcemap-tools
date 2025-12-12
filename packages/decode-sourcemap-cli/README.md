@@ -138,17 +138,130 @@ Paths are printed in a format that allows **Command + Click** (or Ctrl + Click).
 
 <br/>
 
+
 ## 5. CLI Options
 
 | Option | Description |
 |------|-------------|
 | `--html <file>` | Export decoded results as an HTML report |
+| `--strategy=<option>` | Decoding strategy. Default is `strict` |
 
 Example:
 
 ```bash
 npx dsm --html report.html
 ```
+
+```bash
+npx dsm --strategy=strict
+```
+
+```bash
+npx dsm --strategy=filename
+```
+
+<br/>
+
+### Decoding Strategy (`--strategy`)
+
+`decode-sourcemap-cli` supports multiple decoding strategies depending on how strictly
+your local build artifacts match the production build.
+
+This option exists because **sourcemap decoding accuracy fundamentally depends on
+whether the build outputs are identical**.
+
+#### ▶ `strict` (default, recommended)
+
+```bash
+npx dsm --strategy=strict
+```
+
+**Strict mode** assumes that:
+
+- The local build artifacts are generated from the **same release** as production
+- JS bundle filenames (including hashes) match exactly
+- The generated code structure is identical
+
+In this mode, the CLI:
+
+- Resolves the JS bundle **by exact filename**
+- Uses sourcemaps with full line/column validation
+- Fails safely if the bundle or sourcemap does not match
+
+This is the **most accurate and safest mode**, and should be used whenever possible.
+
+✅ Recommended when:
+
+- You have access to the exact release build artifacts
+- You keep build outputs per release
+- You need guaranteed correct source locations
+
+
+
+#### ▶ `filename` (best-effort, low confidence)
+
+```bash
+npx dsm --strategy=filename
+```
+
+**Filename mode** is designed for cases where strict decoding is not possible.
+
+Typical scenarios include:
+
+- The production JS hash is not available locally
+- You rebuilt the app from the same source, but hashes differ
+- You still want a **debugging hint**, not guaranteed accuracy
+
+In this mode, the CLI:
+
+- Ignores hash differences in JS filenames
+- Searches JS bundles by **entry name only**  
+  (e.g. `helloWorld.xxxxx.js` → `helloWorld`)
+- Attempts sourcemap decoding on the closest match
+
+⚠️ **Important limitations**
+
+- The decoded location **may be inaccurate**
+- Line and column mappings can be offset
+- Results are explicitly marked with a warning:
+
+```
+⚠️ Decoded using filename-based strategy.
+This result may be inaccurate if build artifacts differ.
+```
+
+This mode should be treated as a **debugging aid**, not a source of truth.
+
+✅ Useful when:
+
+- You cannot reproduce the exact production build
+- You need quick insight into *which area* of the code might be involved
+- You understand and accept reduced accuracy
+
+❌ Not recommended for:
+
+- Incident reports
+- Root-cause analysis
+- Security or compliance documentation
+
+<br/>
+
+#### ▶ Choosing the Right Strategy
+
+| Situation | Recommended Strategy |
+|---------|---------------------|
+| Same release build available | `strict` |
+| Hashes differ, source similar | `filename` |
+| Compliance / audit debugging | `strict` |
+| Quick exploratory debugging | `filename` |
+
+
+
+> **Note**  
+> Sourcemaps are fundamentally designed to work with **identical build outputs**.  
+> The `filename` strategy intentionally relaxes this rule and should be used with caution.
+
+
 
 <br/>
 

@@ -24,6 +24,7 @@ interface CliOptions {
   config?: string;
   app?: string;
   html?: string | null;
+  strategy?: "strict" | "filename";
 }
 
 /* -------------------------------------------------------------------------- */
@@ -80,7 +81,9 @@ async function main() {
   }
 
   // Decode sourcemaps
-  const results = await decodeMany(dist, targets);
+  const results = await decodeMany(dist, targets, {
+    strategy: options.strategy ?? "strict",
+  });
 
   // Print decoded results
   results.forEach((r, index) => {
@@ -110,6 +113,7 @@ function normalizeCliOptions(args: minimist.ParsedArgs): CliOptions {
     app: typeof args.app === "string" ? args.app : undefined,
     config: typeof args.config === "string" ? args.config : undefined,
     html: typeof args.html === "string" ? args.html : null,
+    strategy: args.strategy === "filename" || args.strategy === "strict" ? args.strategy : "strict",
   };
 }
 
