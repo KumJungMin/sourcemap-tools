@@ -1,4 +1,3 @@
-
 import fs from "fs";
 import path from "path";
 import type { DecodedResult } from "./types.js";
@@ -33,35 +32,62 @@ export function generateHtmlReport(
 
   const html = `<!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <title>Sourcemap Error Report</title>
-  <style>
-    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif; padding: 24px; background: #020617; color: #e5e7eb; }
-    h1 { font-size: 24px; margin-bottom: 16px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    thead { background: #111827; }
-    th, td { padding: 8px 10px; border-bottom: 1px solid #1f2937; vertical-align: top; }
-    tr:nth-child(even) { background: #030712; }
-    code { font-family: ui-monospace, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-  </style>
-</head>
-<body>
-  <h1>Sourcemap Error Report</h1>
-  <table>
-    <thead>
-      <tr>
-        <th>#</th>
-        <th>Bundle Location</th>
-        <th>Source Location</th>
-        <th>Kind</th>
-      </tr>
-    </thead>
-    <tbody>
-    ${rows}
-    </tbody>
-  </table>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <title>decode-sourcemap-cli report</title>
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: #0f172a;
+        color: #e5e7eb;
+        padding: 24px;
+      }
+      h1 {
+        font-size: 20px;
+        margin-bottom: 16px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background: #020617;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+      th, td {
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+      th {
+        background: #111827;
+        text-align: left;
+      }
+      tr:nth-child(even) td {
+        background: #020617;
+      }
+      tr:nth-child(odd) td {
+        background: #030712;
+      }
+      code {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>decode-sourcemap-cli report</h1>
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Bundle position</th>
+          <th>Original source</th>
+          <th>Kind</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows}
+      </tbody>
+    </table>
+  </body>
 </html>`;
 
   const abs = path.resolve(process.cwd(), outputPath);

@@ -1,45 +1,149 @@
 #!/usr/bin/env node
 import minimist from "minimist";
+import path from "path";
 import { selectApp } from "./selectApp.js";
 import { inputLogs } from "./inputLogs.js";
 import { extractErrorLocations } from "./parseLogs.js";
 import { decodeMany } from "./decode.js";
-import { printResult } from "./printer.js";
+import { printResult, setUseColor, setRawMode } from "./printer.js";
 import { generateHtmlReport } from "./htmlReport.js";
+import { loadConfig } from "./config.js";
+import type { AppConfigEntry, SourcemapToolsConfig } from "./config.js";
+
+interface CliOptions {
+  dist?: string;
+  app?: string;
+  appPath?: string;
+  config?: string;
+  html?: string | null;
+  noColor?: boolean;
+  raw?: boolean;
+}
+
+function normalizeCliOptions(argv: minimist.ParsedArgs): CliOptions {
+  return {
+    dist: typeof argv.dist === "string" ? argv.dist : undefined,
+    app: typeof argv.app === "string" ? argv.app : undefined,
+    appPath: typeof argv.appPath === "string" ? argv.appPath : undefined,
+    config: typeof argv.config === "string" ? argv.config : undefined,
+    html: typeof argv.html === "string" ? argv.html : null,
+    noColor: argv["no-color"] === true,
+    raw: argv["raw"] === true,
+  };
+}
+
+function selectAppFromConfig(config: SourcemapToolsConfig, opts: CliOptions, cwd: string): { projectRoot: string; dist: string; appName: string } {
+  const apps = config.apps;
+
+  if (!apps || apps.length === 0) {
+    throw new Error("No apps defined in sourcemap.config.json");
+  }
+
+  let selected: AppConfigEntry | undefined;
+
+  if (opts.app) {
+    selected = apps.find((a) => a.name === opts.app);
+    if (!selected) {
+      throw new Error(`App '${opts.app}' not found in config. Available: ${apps.map((a) => a.name).join(", ")}`);
+    }
+  } else if (apps.length === 1) {
+    selected = apps[0];
+  }
+
+  if (!selected) {
+    // Lazy import to avoid inquirer dependency during type analysis
+    const inquirer = require("inquirer") as typeof import("inquirer");
+    return inquirer
+      .prompt([
+        {
+          type: "list",
+          name: "appName",
+          message: "Select target app:",
+          choices: apps.map((a) => ({ name: `${a.name}  (${a.distPath})`, value: a.name })),
+        },
+      ])
+      .then((answer) => {
+        const chosen = apps.find((a) => a.name === answer.appName)!;
+        const projectRoot = path.resolve(cwd, chosen.appPath ?? ".");
+        const dist = path.resolve(cwd, chosen.distPath);
+        return { projectRoot, dist, appName: chosen.name };
+      });
+  }
+
+  const projectRoot = path.resolve(cwd, selected.appPath ?? ".");
+  const dist = path.resolve(cwd, selected.distPath);
+  return { projectRoot, dist, appName: selected.name };
+}
+
+async function resolveTarget(cwd: string, opts: CliOptions): Promise<{ projectRoot: string; dist: string; appName: string }> {
+  // 1) Highest priority: explicit --dist
+  if (opts.dist) {
+    const dist = path.resolve(cwd, opts.dist);
+    const projectRoot = opts.appPath ? path.resolve(cwd, opts.appPath) : cwd;
+    return { projectRoot, dist, appName: opts.app ?? "app" };
+  }
+
+  // 2) Config-based multi app (sourcemap.config.json)
+  const config = loadConfig(cwd, opts.config ?? null);
+  if (config) {
+    return selectAppFromConfig(config, opts, cwd);
+  }
+
+  // 3) Fallback: turborepo-style /apps auto discovery
+  const fallback = await selectApp();
+  return {
+    projectRoot: fallback.root,
+    dist: fallback.dist,
+    appName: fallback.targetApp,
+  };
+}
 
 async function main() {
   const argv = minimist(process.argv.slice(2));
-  const htmlOut = typeof argv.html === "string" ? argv.html : null;
+  const opts = normalizeCliOptions(argv);
+
+  if (opts.noColor) {
+    setUseColor(false);
+  }
+  if (opts.raw) {
+    setRawMode(true);
+  }
 
   console.log("");
   console.log("🔍 decode-sourcemap-cli");
   console.log("------------------------");
 
-  const { root, targetApp, dist } = await selectApp();
+  const cwd = process.cwd();
 
-  console.log(`\n📦 Selected app: ${targetApp}`);
-  console.log(`📁 dist: ${dist}\n`);
+  // Resolve target build directory
+  const { projectRoot, dist, appName } = await resolveTarget(cwd, opts);
 
-  const logLines = await inputLogs();
-  if (logLines.length === 0) {
+  console.log(`📁 Project root: ${projectRoot}`);
+  console.log(`📦 App: ${appName}`);
+  console.log(`📂 Dist: ${dist}`);
+  console.log("");
+
+  // Input logs
+  const lines = await inputLogs();
+  if (lines.length === 0) {
     console.log("No logs provided. Exit.");
     return;
   }
 
-  const targets = extractErrorLocations(logLines);
+  const targets = extractErrorLocations(lines);
   if (targets.length === 0) {
-    console.log("No locations found in logs.");
+    console.log("No 'xxx.js:line:column' pattern found in logs.");
     return;
   }
 
-  const results = await decodeMany(dist, targets, root);
+  const results = await decodeMany(dist, targets);
 
-  results.forEach((r, idx) => {
-    printResult(r, idx + 1);
+  results.forEach((r, index) => {
+    printResult(r, index + 1);
   });
 
-  if (htmlOut) {
-    const outPath = generateHtmlReport(results, htmlOut);
+  if (opts.html) {
+    const outPath = generateHtmlReport(results, opts.html);
     console.log(`\n📄 HTML report generated at: ${outPath}`);
   }
 

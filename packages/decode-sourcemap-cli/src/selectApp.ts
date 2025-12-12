@@ -1,7 +1,12 @@
-
 import path from "path";
 import fs from "fs";
 import inquirer from "inquirer";
+
+interface SelectAppResult {
+  root: string;
+  targetApp: string;
+  dist: string;
+}
 
 function findWorkspaceRoot(): string {
   let current = process.cwd();
@@ -14,37 +19,35 @@ function findWorkspaceRoot(): string {
 
     const parent = path.dirname(current);
     if (parent === current) {
+      // reached filesystem root
       return process.cwd();
     }
     current = parent;
   }
 }
 
-export interface AppSelection {
-  root: string;
-  targetApp: string;
-  dist: string;
-}
-
-export async function selectApp(): Promise<AppSelection> {
+export async function selectApp(): Promise<SelectAppResult> {
   const root = findWorkspaceRoot();
   const appsDir = path.join(root, "apps");
 
   if (!fs.existsSync(appsDir)) {
-    console.error(`❌ apps directory not found at: ${appsDir}`);
-    process.exit(1);
+    // graceful fallback: treat root as dist
+    return {
+      root,
+      targetApp: path.basename(root),
+      dist: path.join(root, "dist"),
+    };
   }
 
-  const apps = fs
-    .readdirSync(appsDir)
-    .filter((name) => {
-      const full = path.join(appsDir, name);
-      return fs.statSync(full).isDirectory();
-    });
+  const entries = await fs.promises.readdir(appsDir, { withFileTypes: true });
+  const apps = entries.filter((e) => e.isDirectory()).map((e) => e.name);
 
   if (apps.length === 0) {
-    console.error("❌ No app folders found under apps/");
-    process.exit(1);
+    return {
+      root,
+      targetApp: path.basename(root),
+      dist: path.join(root, "dist"),
+    };
   }
 
   const { selected } = await inquirer.prompt([
