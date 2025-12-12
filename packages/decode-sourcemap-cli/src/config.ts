@@ -8,20 +8,14 @@ import path from "path";
  * (ex: monorepo with multiple apps, or multiple build outputs)
  */
 export interface AppConfigEntry {
-  /**
-   * Logical app name shown in the CLI selector.
-   * Example: "web", "admin", "mobile"
-   */
+  /** Logical app name */
   name: string;
 
-  /**
-   * Path to the build output directory that contains:
-   * - bundled JS files
-   * - corresponding `.map` files
-   *
-   * This path is resolved relative to the current working directory.
-   */
-  distPath: string;
+  /** App root directory (e.g. apps/vue1) */
+  appPath?: string;
+
+  /** Build output directory (e.g. apps/vue1/dist) */
+  distPath?: string;
 }
 
 /**

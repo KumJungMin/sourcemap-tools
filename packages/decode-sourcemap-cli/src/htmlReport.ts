@@ -1,6 +1,7 @@
 import fs from "fs";
 import path from "path";
 import type { DecodedResult } from "./types.js";
+import { resolveDisplaySource } from "./printer.js";
 
 
 /** 
@@ -10,11 +11,15 @@ import type { DecodedResult } from "./types.js";
  * */ 
 export function generateHtmlReport(
   results: DecodedResult[],
-  outputPath: string
+  outputPath: string,
+  appRoot: string
 ): string {
   const rows = results
     .map((r, idx) => {
-      const src = r.original.source ?? "N/A";
+      const resolvedSource = resolveDisplaySource(r.original.source, appRoot);
+      const src = resolvedSource
+        ? path.relative(appRoot, resolvedSource)
+        : "N/A";
       const line = r.original.line ?? "N/A";
       const col = r.original.column ?? "N/A";
 

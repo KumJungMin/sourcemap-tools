@@ -58,9 +58,10 @@ async function main() {
   const cwd = process.cwd();
 
   // Resolve build output directory
-  const { dist, appName } = await resolveTarget(cwd, options);
+  const { dist, appName, appRoot } = await resolveTarget(cwd, options);
 
   console.log(`📦 App: ${appName}`);
+  console.log(`📁 AppRoot: ${appRoot}`);
   console.log(`📂 Dist: ${dist}`);
   console.log("");
 
@@ -83,12 +84,12 @@ async function main() {
 
   // Print decoded results
   results.forEach((r, index) => {
-    printResult(r, index + 1);
+    printResult(r, index + 1, appRoot);
   });
 
   // Optional HTML report
   if (options.html) {
-    const outPath = generateHtmlReport(results, options.html);
+    const outPath = generateHtmlReport(results, options.html, appRoot);
     console.log(`\n📄 HTML report generated at: ${outPath}`);
   }
 
@@ -130,7 +131,7 @@ async function selectAppFromConfig(
   config: SourcemapToolsConfig,
   options: CliOptions,
   cwd: string
-): Promise<{ dist: string; appName: string }> {
+): Promise<{ dist: string; appName: string, appRoot: string }> {
   const apps = config.apps;
 
   if (!apps || apps.length === 0) {
@@ -175,6 +176,7 @@ async function selectAppFromConfig(
   return {
     appName: selected.name,
     dist: path.resolve(cwd, distPath),
+    appRoot: path.resolve(cwd, selected.appPath ?? "."),
   };
 }
 
@@ -193,12 +195,13 @@ async function selectAppFromConfig(
 async function resolveTarget(
   cwd: string,
   options: CliOptions
-): Promise<{ dist: string; appName: string }> {
+): Promise<{ dist: string; appName: string; appRoot: string }> {
   // 1) Explicit dist path
   if (options.dist) {
     return {
       dist: path.resolve(cwd, options.dist),
       appName: options.app ?? "app",
+      appRoot: cwd, // single app assumption
     };
   }
 
@@ -212,6 +215,7 @@ async function resolveTarget(
   const fallback = await selectApp();
   return {
     appName: fallback.appName,
-    dist: path.join(fallback.appRoot, "dist"), // assume /dist
+    appRoot: fallback.appRoot,
+    dist: path.join(fallback.appRoot, "dist"),
   };
 }

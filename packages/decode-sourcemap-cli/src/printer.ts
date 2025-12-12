@@ -1,5 +1,6 @@
 import chalk from "chalk";
 import type { DecodedResult } from "./types.js";
+import path from "path";
 
 /** 
  * Print decoded result to console.
@@ -7,7 +8,8 @@ import type { DecodedResult } from "./types.js";
  * - In raw mode, outputs a single line per result.
  * - In formatted mode, provides detailed, colorized output.
  * */ 
-export function printResult(result: DecodedResult, index: number) {
+export function printResult(result: DecodedResult, index: number, appRoot: string) {
+  
   console.log(color("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━", (s) => chalk.yellow(s)));
   console.log(
     color(`#${index} Decoded Location`, (s) => chalk.bold.white(s)) + "  " + kindLabel(result.kind)
@@ -20,7 +22,8 @@ export function printResult(result: DecodedResult, index: number) {
       color(`${result.file}:${result.line}:${result.column}`, (s) => chalk.cyan(s))
   );
 
-  const srcFile = shortenPath(result.original.source ?? undefined);
+  const displaySource = resolveDisplaySource(result.original.source, appRoot);
+  const srcFile = shortenPath(displaySource, appRoot);
   const srcLine = result.original.line ?? "N/A";
   const srcCol = result.original.column ?? "N/A";
 
@@ -32,7 +35,7 @@ export function printResult(result: DecodedResult, index: number) {
   console.log("");
 
   if (result.original.source && result.original.line && result.original.column) {
-    const clickLine = `${shortenPath(result.original.source)}:${result.original.line}:${result.original.column}`;
+    const clickLine = `${shortenPath(displaySource)}:${result.original.line}:${result.original.column}`;
     console.log(color("Open in editor:", (s) => chalk.white(s)));
     console.log("  " + clickLine);
     console.log("");
@@ -45,16 +48,16 @@ function color(text: string, fn: (s: string) => string): string {
   return fn(text);
 }
 
-function shortenPath(p?: string | null): string {
+function shortenPath(p?: string | null, appRoot?: string): string {
   if (!p) return "N/A";
 
+  if (appRoot && p.startsWith(appRoot)) {
+    return path.relative(appRoot, p);
+  }
   const nodeIdx = p.indexOf("node_modules");
   if (nodeIdx !== -1) return p.slice(nodeIdx);
 
-  const srcIdx = p.indexOf("src/");
-  if (srcIdx !== -1) return p.slice(srcIdx);
-
-  return p.replace(/^((\.\.)\/)+/, "");
+  return p;
 }
 
 function kindLabel(kind: DecodedResult["kind"]): string {
@@ -76,4 +79,13 @@ function kindLabel(kind: DecodedResult["kind"]): string {
     default:
       return color(" ??? ", (s) => chalk.bgGray.black(s));
   }
+}
+
+export function resolveDisplaySource(
+  source: string | null,
+  appRoot: string
+): string | null {
+  if (!source) return null;
+  if (path.isAbsolute(source)) return source;
+  return path.join(appRoot, source);
 }
